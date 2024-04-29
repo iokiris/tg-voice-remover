@@ -1,0 +1,6 @@
+/temp/
+/.venv/
+/pretrained_models/
+/output/
+.env
+.idea
