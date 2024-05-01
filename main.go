@@ -8,10 +8,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
 
 const (
-	workerThreadCount = 4
+	workerThreadCount = 2
 )
 
 type BotHandler struct {
@@ -25,7 +26,6 @@ func NewBotHandler(botToken string, webhookURL string, broker *Broker) (*BotHand
 		return nil, err
 	}
 	//bot.Debug = true
-
 	webhookConfig, err := tgbotapi.NewWebhook(webhookURL)
 	if err != nil {
 		return nil, fmt.Errorf("cannot add webhook: %v", err)
@@ -99,8 +99,9 @@ func createAndSendTask(broker *Broker, taskType string, data interface{}, bot *t
 		return err
 	}
 	task := Task{
-		Type: taskType,
-		Data: jsonData,
+		Type:          taskType,
+		Data:          jsonData,
+		UnixStartTime: time.Now().Unix(),
 	}
 	encodedTask, err := json.Marshal(task)
 	if err != nil {
@@ -143,7 +144,7 @@ func (h *BotHandler) onAudio(update tgbotapi.Update, audio *tgbotapi.Audio) {
 	audioTask := AudioTask{
 		ChatID:    update.Message.Chat.ID,
 		AudioID:   audio.FileID,
-		AudioName: audio.FileName,
+		AudioName: audio.Title,
 	}
 	if err := createAndSendTask(
 		h.broker, "audio_process", audioTask, h.bot, update.Message.Chat.ID,

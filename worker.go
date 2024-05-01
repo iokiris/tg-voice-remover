@@ -3,22 +3,29 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"io"
 	"log"
 	"net/http"
+	"time"
 )
 
 func StartWorker(bot *tgbotapi.BotAPI, broker *Broker) {
 	for {
 		messages, err := broker.ReceiveMessage()
 		if err != nil {
-			log.Fatalf("Failed to receive messages: %v", err)
+			if err != nil {
+				log.Printf("Failed to receive messages: %v, sleeping 5s...", err)
+				time.Sleep(time.Second * 5)
+				continue
+			}
 		}
 		for message := range messages {
 			var task Task
 			if err := json.Unmarshal(message.Body, &task); err != nil {
 				log.Println("Error decoding task:", err)
+				message.Nack(false, false)
 				continue
 			}
 			switch task.Type {
@@ -27,13 +34,21 @@ func StartWorker(bot *tgbotapi.BotAPI, broker *Broker) {
 				var audioTask AudioTask
 				if err := json.Unmarshal(task.Data, &audioTask); err != nil {
 					log.Println("Error decoding audio")
+					message.Nack(false, false)
 					continue
 				}
-				if err := processAudio(bot, audioTask); err != nil {
-					log.Println("Error processing audio")
-					continue
+				if err := processAudio(bot, audioTask, task.UnixStartTime); err != nil {
+					if task.Repeated {
+						log.Println("Skipping task with messageID: ", message.MessageId)
+						message.Ack(true)
+						continue
+					} else {
+						task.Repeated = true
+						message.Nack(false, true)
+					}
 				}
 			}
+			message.Ack(true)
 		}
 	}
 }
@@ -64,7 +79,7 @@ func downloadAudio(bot *tgbotapi.BotAPI, fileID string) ([]byte, error) {
 	return content, nil
 }
 
-func processAudio(bot *tgbotapi.BotAPI, task AudioTask) error {
+func processAudio(bot *tgbotapi.BotAPI, task AudioTask, startTime int64) error {
 	content, err := downloadAudio(bot, task.AudioID)
 	if err != nil {
 		log.Println("Download error")
@@ -77,10 +92,10 @@ func processAudio(bot *tgbotapi.BotAPI, task AudioTask) error {
 	}
 	b := bytes.NewReader(instrumental)
 	msg := tgbotapi.NewAudio(task.ChatID, tgbotapi.FileReader{
-		Name:   task.AudioName + "(@voiceerase_bot)",
+		Name:   "@voiceeraser_bot - " + task.AudioName,
 		Reader: b,
 	})
-
+	msg.Caption = fmt.Sprintf("Время обработки: %dс.", time.Now().Unix()-startTime)
 	_, err = bot.Send(msg)
 	if err != nil {
 

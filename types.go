@@ -1,10 +1,14 @@
 package main
 
-import "encoding/json"
+import (
+	"encoding/json"
+)
 
 type Task struct {
-	Type string          `json:"type"`
-	Data json.RawMessage `json:"data"`
+	Type          string          `json:"type"`
+	Data          json.RawMessage `json:"data"`
+	Repeated      bool            `json:"repeated"`
+	UnixStartTime int64           `json:"unix_start_time"`
 }
 
 type AudioTask struct {
