@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	workerThreadCount = 2
+	workerThreadCount = 4
 )
 
 type BotHandler struct {
@@ -146,6 +146,7 @@ func (h *BotHandler) onAudio(update tgbotapi.Update, audio *tgbotapi.Audio) {
 		AudioID:   audio.FileID,
 		AudioName: audio.Title,
 	}
+	log.Println("New audioTask, title: ", audioTask.AudioName)
 	if err := createAndSendTask(
 		h.broker, "audio_process", audioTask, h.bot, update.Message.Chat.ID,
 	); err != nil {

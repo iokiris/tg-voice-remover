@@ -48,7 +48,7 @@ func (broker *Broker) ensureChannel() error {
 	}
 	newCh, err := broker.connection.Channel()
 	if err != nil {
-		return fmt.Errorf("failed to open channel: %w", err)
+		return fmt.Errorf("failed to open channel: %w\n", err)
 	}
 	broker.channel = newCh
 	return nil
@@ -61,7 +61,7 @@ func (broker *Broker) ReceiveMessage() (<-chan amqp.Delivery, error) {
 	messages, err := broker.channel.Consume(
 		broker.queue.Name,
 		"",
-		false,
+		true,
 		false,
 		false,
 		false,

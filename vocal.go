@@ -2,12 +2,18 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"github.com/google/uuid"
 	"log"
+	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 )
+
+type AudioProcessRequest struct {
+	InputPath  string `json:"input_path"`
+	OutputPath string `json:"output_path"`
+}
 
 func removeVocals(input []byte) ([]byte, error) {
 	uid := uuid.New().String()
@@ -26,16 +32,36 @@ func removeVocals(input []byte) ([]byte, error) {
 		log.Println("error writing file:", err)
 		return nil, err
 	}
-	cmd := exec.Command("python", "process_audio.py", inputFileName, outputDir)
-	var out bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &stderr
-	err = cmd.Run()
+	requestData := AudioProcessRequest{
+		InputPath:  inputFileName,
+		OutputPath: outputDir,
+	}
+	jsonData, err := json.Marshal(requestData)
 	if err != nil {
-		log.Printf("cmdrun failed: %s", stderr.String())
+		log.Println("Error marshaling JSON:", err)
 		return nil, err
 	}
+
+	req, err := http.NewRequest("POST", "http://localhost:8000/process-audio/", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Println("Error creating request:", err)
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Println("Error sending request:", err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("Non-OK HTTP status: %s", resp.Status)
+		return nil, err
+	}
+
 	processedAudioPath := filepath.Join(outputDir, uid+"_input", "accompaniment.mp3")
 	if _, err := os.Stat(processedAudioPath); os.IsNotExist(err) {
 		log.Println("processed file doesn't exists:", processedAudioPath)

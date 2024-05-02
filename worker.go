@@ -25,7 +25,6 @@ func StartWorker(bot *tgbotapi.BotAPI, broker *Broker) {
 			var task Task
 			if err := json.Unmarshal(message.Body, &task); err != nil {
 				log.Println("Error decoding task:", err)
-				message.Nack(false, false)
 				continue
 			}
 			switch task.Type {
@@ -34,21 +33,12 @@ func StartWorker(bot *tgbotapi.BotAPI, broker *Broker) {
 				var audioTask AudioTask
 				if err := json.Unmarshal(task.Data, &audioTask); err != nil {
 					log.Println("Error decoding audio")
-					message.Nack(false, false)
 					continue
 				}
 				if err := processAudio(bot, audioTask, task.UnixStartTime); err != nil {
-					if task.Repeated {
-						log.Println("Skipping task with messageID: ", message.MessageId)
-						message.Ack(true)
-						continue
-					} else {
-						task.Repeated = true
-						message.Nack(false, true)
-					}
+					continue
 				}
 			}
-			message.Ack(true)
 		}
 	}
 }
@@ -85,6 +75,7 @@ func processAudio(bot *tgbotapi.BotAPI, task AudioTask, startTime int64) error {
 		log.Println("Download error")
 		return err
 	}
+	log.Println("Processing audio: ", task.AudioName)
 	instrumental, err := removeVocals(content)
 	if err != nil {
 		log.Println("removeVocals error")
