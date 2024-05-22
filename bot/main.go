@@ -3,22 +3,31 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/joho/godotenv"
+	"github.com/google/uuid"
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 const (
-	workerThreadCount = 4
+	callbackListenersCount = 4
 )
 
 type BotHandler struct {
 	broker *Broker
 	bot    *tgbotapi.BotAPI
 }
+
+var (
+	mutex   sync.RWMutex
+	taskMap = make(map[string]Task)
+)
+
+var globalBotH *BotHandler
 
 func NewBotHandler(botToken string, webhookURL string, broker *Broker) (*BotHandler, error) {
 	bot, err := tgbotapi.NewBotAPI(botToken)
@@ -35,11 +44,11 @@ func NewBotHandler(botToken string, webhookURL string, broker *Broker) (*BotHand
 		return nil, fmt.Errorf("webhook doesn't respond: %v", err)
 	}
 	fmt.Println("Webhook is connected")
-
-	return &BotHandler{
+	globalBotH = &BotHandler{
 		bot:    bot,
 		broker: broker,
-	}, nil
+	}
+	return globalBotH, nil
 }
 
 func (h *BotHandler) Start() {
@@ -55,9 +64,10 @@ func (h *BotHandler) Start() {
 func (h *BotHandler) Run() error {
 	updates := h.bot.ListenForWebhook("/tg-hook")
 	go func() {
-		err := http.ListenAndServe("0.0.0.0:8080", nil)
+		http.HandleFunc("/callback", callbackWorker)
+		err := http.ListenAndServe("0.0.0.0:8000", nil)
 		if err != nil {
-			log.Panic("Cannot start server")
+			log.Panicln("Cannot start server: ", err)
 		}
 	}()
 	for update := range updates {
@@ -67,21 +77,32 @@ func (h *BotHandler) Run() error {
 }
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Failed to load .env")
-	}
 	broker := NewBroker()
 	defer broker.Close()
 
+	ngrokApiURL, err := getEnvWithRetry("NGROK_API_URL", 5, 10)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("NGROK_API: ", ngrokApiURL)
+	ngrokURL, err := getNgrokPublicURL(ngrokApiURL)
+	if err != nil {
+		log.Fatal("Error gettin Ngrok URL: ", err)
+	}
+	webhookUrl := ngrokURL + "/tg-hook"
+	fmt.Println("GO NGROK_URL:", webhookUrl)
+
+	botToken, err := getEnvWithRetry("BOT_TOKEN", 1, 0)
+	if err != nil {
+		log.Fatal(err)
+	}
 	handler, err := NewBotHandler(
-		os.Getenv("BOT_TOKEN"),
-		os.Getenv("WEBHOOK"),
+		botToken,
+		webhookUrl,
 		broker,
 	)
-	for i := 0; i < workerThreadCount; i++ {
-		go StartWorker(handler.bot, broker)
-	}
+	go StartWorker(handler.bot, broker)
 	if err != nil {
 		log.Fatalf("error when create bot handler")
 	}
@@ -98,7 +119,9 @@ func createAndSendTask(broker *Broker, taskType string, data interface{}, bot *t
 		}
 		return err
 	}
+	taskUUID := uuid.New().String()
 	task := Task{
+		ID:            taskUUID,
 		Type:          taskType,
 		Data:          jsonData,
 		UnixStartTime: time.Now().Unix(),
@@ -126,7 +149,6 @@ func (h *BotHandler) safeCall(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 }
 
 func (h *BotHandler) onUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	// log.Printf("%+v\n", update)
 	if update.Message != nil {
 		if audio := update.Message.Audio; audio != nil {
 			h.onAudio(update, audio)
@@ -163,4 +185,18 @@ func (h *BotHandler) onAudio(update tgbotapi.Update, audio *tgbotapi.Audio) {
 	if err != nil {
 		return
 	}
+}
+
+// delay in seconds
+func getEnvWithRetry(envVar string, retries int, delay time.Duration) (string, error) {
+	var value string
+	for i := 0; i < retries; i++ {
+		value = os.Getenv(envVar)
+		if value != "" {
+			return value, nil
+		}
+		log.Printf("Env-var %s not set, retrying after %dsec...", envVar, delay)
+		time.Sleep(time.Second * delay)
+	}
+	return "", fmt.Errorf("environment variable %s not set after %d retries", envVar, retries)
 }

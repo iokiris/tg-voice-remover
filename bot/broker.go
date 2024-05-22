@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/streadway/amqp"
 	"log"
+	"time"
+
+	"github.com/streadway/amqp"
 )
 
 type Broker struct {
@@ -12,8 +14,26 @@ type Broker struct {
 	queue      amqp.Queue
 }
 
+func connectRabbitMQ() (*amqp.Connection, error) {
+	var conn *amqp.Connection
+	var err error
+	maxRetries := 15
+	retryDelay := 5 * time.Second
+
+	for i := 0; i < maxRetries; i++ {
+		conn, err = amqp.Dial("amqp://guest:guest@rabbitmq-tvr:5672/")
+		if err == nil {
+			log.Println("Successfully connected to RabbitMQ")
+			return conn, nil
+		}
+		log.Printf("Failed to connect to RabbitMQ (attempt %d/%d): %v", i+1, maxRetries, err)
+		time.Sleep(retryDelay)
+	}
+	return nil, err
+}
+
 func NewBroker() *Broker {
-	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	conn, err := connectRabbitMQ()
 	if err != nil {
 		log.Fatalf("RabbitMQ connection error %v", err)
 	}
