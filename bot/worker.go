@@ -31,21 +31,41 @@ func StartWorker(bot *tgbotapi.BotAPI, broker *Broker) {
 			switch task.Type {
 
 			case "audio_process":
-				var audioTask AudioTask
-				if err := json.Unmarshal(task.Data, &audioTask); err != nil {
-					log.Println("Error decoding audio")
-					continue
-				}
-				if err := processAudio(bot, audioTask); err != nil {
-					msg := tgbotapi.NewMessage(audioTask.ChatID,
-						fmt.Sprintf("Не удается распознать аудио *%s*", audioTask.AudioName))
-					msg.ParseMode = "MarkdownV2"
-					_, err := bot.Send(msg)
-					if err != nil {
-						return
+				go func() {
+					var audioTask AudioTask
+					log.Printf("Audiotask %s putted from queue\n", task.ID)
+					if err := json.Unmarshal(task.Data, &audioTask); err != nil {
+						log.Println("Error decoding audio")
+						msg := tgbotapi.NewMessage(audioTask.ChatID,
+							fmt.Sprintf("Не удается распознать аудио *%s*", audioTask.AudioName))
+						msg.ParseMode = "MarkdownV2"
+						_, err := bot.Send(msg)
+						if err != nil {
+							log.Println("Error sending error to client: ", err)
+							return
+						}
 					}
-					continue
-				}
+					if err, text := processAudio(bot, audioTask); err != nil {
+						sText := QMString(fmt.Sprintf(
+							"Не удается отправить в обработку аудио *%s*. \n%s",
+							audioTask.AudioName,
+							text,
+						),
+						)
+						msg := tgbotapi.NewMessage(audioTask.ChatID, sText)
+						msg.ParseMode = "MarkdownV2"
+						_, err := bot.Send(msg)
+						if err != nil {
+							log.Println("Error sending error to client: ", err)
+							return
+						}
+					} else {
+						msg := tgbotapi.NewMessage(audioTask.ChatID,
+							fmt.Sprintf("Ваше аудио *%s* подано в обработку", audioTask.AudioName))
+						msg.ParseMode = "MarkdownV2"
+						_, err = bot.Send(msg)
+					}
+				}()
 			}
 		}
 	}
@@ -77,23 +97,20 @@ func downloadAudio(bot *tgbotapi.BotAPI, fileID string) ([]byte, error) {
 	return content, nil
 }
 
-func processAudio(bot *tgbotapi.BotAPI, task AudioTask) error {
+func processAudio(bot *tgbotapi.BotAPI, task AudioTask) (error, string) {
 	content, err := downloadAudio(bot, task.AudioID)
 	if err != nil {
 		log.Println("Download error")
-		return err
+		return err, "Не удалось скачать файл"
 	}
 	log.Println("Processing audio: ", task.AudioName)
-	err = removeVocals(content, task)
-	if err != nil {
+	pErr := removeVocals(content, task)
+	log.Println(pErr)
+	if pErr != nil {
 		log.Println("removeVocals error")
-		return err
+		return pErr.Err, pErr.Message
 	}
-	if err != nil {
-
-		return err
-	}
-	return nil
+	return nil, ""
 }
 
 type CallbackRequest struct {
@@ -117,6 +134,7 @@ func callbackWorker(w http.ResponseWriter, r *http.Request) {
 			err := sendAudioFile(audioName, fileData, chatID, processTime)
 			if err != nil {
 				log.Println("Error sending audio file:", err)
+				return
 			}
 		}(cbReq.AudioName, cbReq.FileData, cbReq.ChatID, cbReq.ProcessTime)
 

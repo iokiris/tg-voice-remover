@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
@@ -38,7 +37,7 @@ func getNgrokPublicURL(ngrokAPIURL string) (string, error) {
 				log.Println(err)
 			}
 		}(resp.Body)
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			log.Printf("Attempt %d/%d: Error reading response body: %v", attempt, maxAttempts, err)
 			time.Sleep(sleepIntervalSec * time.Second)

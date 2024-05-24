@@ -43,9 +43,9 @@ func NewBroker() *Broker {
 		log.Fatalf("Cannot open connection channel")
 	}
 	q, err := ch.QueueDeclare(
-		"task_queue",
+		"temp_task_queue",
 		false,
-		false,
+		true,
 		false,
 		false,
 		nil,
