@@ -3,7 +3,7 @@ version: '3.8'
 services:
   go-tvr-bot:
     build: ./bot
-    # image: ghcr.io/iokiris/tg-voice-remover-bot:1.0.0
+    image: ghcr.io/iokiris/go-tvr-bot:1.0.0
     depends_on:
       - ngrok-tvr
       - rabbitmq-tvr
@@ -21,17 +21,18 @@ services:
     restart: on-failure:3
   fastapi-tvr:
     build: ./server
+    image: ghcr.io/iokiris/tvr-bot-audioserver:1.0.0
     ports:
       - "8000:8000"
     volumes:
       - python-packages:/root/.cache/pip
       - ./server:/app
     restart: on-failure:3
-    # deploy:
-    #   resources:
-    #     limits:
-          #memory: 2GB
-          #cpus: '1'
+    deploy:
+       resources:
+         limits:
+          memory: 2GB
+          cpus: '1'
   rabbitmq-tvr:
     image: "rabbitmq:3-management"
     command: rabbitmq-server --quite # чтобы не было тонны логов при запуске
@@ -47,5 +48,6 @@ services:
     environment:
       - NGROK_AUTHTOKEN=${NGROK_TOKEN}
       - NGROK_URL_ENDPOINT=http://localhost:4040/api/tunnels
+    restart: always
 volumes:
   python-packages:

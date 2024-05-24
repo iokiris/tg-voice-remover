@@ -10,4 +10,4 @@ COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements.txt
 COPY . .
-CMD ["uvicorn", "process_audio:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+CMD ["uvicorn", "process_audio:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

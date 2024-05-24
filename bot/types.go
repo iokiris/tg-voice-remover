@@ -18,7 +18,27 @@ type AudioTask struct {
 	AudioName string `json:"audioName"`
 }
 
-type ProcessedTask struct {
-	Status   string `json:"status"`
-	FilePath string `json:"file_path,omitempty"`
+type errWithText struct {
+	Message string
+	Err     error
+}
+
+func MessageError(err error, msg string) *errWithText {
+	if msg == "" && err != nil {
+		msg = "Неизвестная ошибка"
+	}
+	return &errWithText{
+		Message: msg,
+		Err:     err,
+	}
+}
+
+func SMessageError(err error, msg string) *errWithText {
+	if msg == "" && err != nil {
+		msg = "Внутренняя ошибка сервиса"
+	}
+	return &errWithText{
+		Message: msg,
+		Err:     err,
+	}
 }

@@ -112,7 +112,7 @@ func main() {
 func createAndSendTask(broker *Broker, taskType string, data interface{}, bot *tgbotapi.BotAPI, chatID int64) error {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
-		msg := tgbotapi.NewMessage(chatID, "Этот файл не удается обработать.")
+		msg := tgbotapi.NewMessage(chatID, QMString("Этот файл не удается обработать."))
 		_, err := bot.Send(msg)
 		if err != nil {
 			return err
@@ -128,7 +128,7 @@ func createAndSendTask(broker *Broker, taskType string, data interface{}, bot *t
 	}
 	encodedTask, err := json.Marshal(task)
 	if err != nil {
-		msg := tgbotapi.NewMessage(chatID, "Не удалось создать задачу.")
+		msg := tgbotapi.NewMessage(chatID, QMString("Не удалось создать задачу."))
 		_, err := bot.Send(msg)
 		if err != nil {
 			return err
@@ -153,7 +153,7 @@ func (h *BotHandler) onUpdate(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		if audio := update.Message.Audio; audio != nil {
 			h.onAudio(update, audio)
 		} else {
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Отправь аудиофайл с которого нужно вырезать слова")
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Отправь аудиофайл с которого нужно вырезать слова.")
 			_, err := bot.Send(msg)
 			if err != nil {
 				return
@@ -172,7 +172,7 @@ func (h *BotHandler) onAudio(update tgbotapi.Update, audio *tgbotapi.Audio) {
 	if err := createAndSendTask(
 		h.broker, "audio_process", audioTask, h.bot, update.Message.Chat.ID,
 	); err != nil {
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Этот файл не удается обработать.")
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, QMString("Этот файл не удается обработать."))
 		_, err := h.bot.Send(msg)
 		if err != nil {
 			return
